@@ -1,0 +1,324 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'dart:ui';
+
+void main() {
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => MoodProvider(),
+      child: const EstrallisApp(),
+    ),
+  );
+}
+
+class MoodProvider extends ChangeNotifier {
+  Color _starColor = Colors.grey;
+  String _mood = "Neutral";
+  bool _isLoggedIn = false;
+
+  Color get starColor => _starColor;
+  String get mood => _mood;
+  bool get isLoggedIn => _isLoggedIn;
+
+  void login() {
+    _isLoggedIn = true;
+    notifyListeners();
+  }
+
+  void updateMood(String newMood) {
+    _mood = newMood;
+
+    if (newMood == "Calm") {
+      _starColor = Colors.blueAccent;
+    } else if (newMood == "Energized") {
+      _starColor = Colors.cyanAccent;
+    } else {
+      _starColor = Colors.grey;
+    }
+
+    notifyListeners();
+  }
+}
+
+class EstrallisApp extends StatelessWidget {
+  const EstrallisApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(),
+      home: const RootScreen(),
+    );
+  }
+}
+
+class RootScreen extends StatelessWidget {
+  const RootScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final moodData = Provider.of<MoodProvider>(context);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF050505),
+      body: Stack(
+        children: [
+          // Central star glow
+          const Positioned.fill(
+            child: Center(
+              child: StarGlowWidget(),
+            ),
+          ),
+
+          // Player screen (slides up)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeInOutCubic,
+            top: moodData.isLoggedIn
+                ? 0
+                : MediaQuery.of(context).size.height,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: const PlayerScreen(),
+          ),
+
+          // Login screen (slides away)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeInOutCubic,
+            top: moodData.isLoggedIn
+                ? -MediaQuery.of(context).size.height
+                : 0,
+            left: 0,
+            right: 0,
+            bottom: moodData.isLoggedIn
+                ? MediaQuery.of(context).size.height
+                : 0,
+            child: const LoginScreen(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StarGlowWidget extends StatelessWidget {
+  const StarGlowWidget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final moodData = Provider.of<MoodProvider>(context);
+
+    return Container(
+      width: 450,
+      height: 450,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            moodData.starColor.withOpacity(0.5),
+            Colors.transparent,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class LoginScreen extends StatelessWidget {
+  const LoginScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            "ESTRALLIS",
+            style: TextStyle(
+              fontSize: 40,
+              fontWeight: FontWeight.w200,
+              letterSpacing: 8,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            "Enter the Nebula",
+            style: TextStyle(color: Colors.white54),
+          ),
+          const SizedBox(height: 60),
+          ElevatedButton(
+            onPressed: () => Provider.of<MoodProvider>(
+              context,
+              listen: false,
+            ).login(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 50,
+                vertical: 15,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+            ),
+            child: const Text("INITIALIZE"),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PlayerScreen extends StatelessWidget {
+  const PlayerScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final moodData = Provider.of<MoodProvider>(context);
+
+    return Center(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(40),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          child: Container(
+            width: 340,
+            height: 580,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.03),
+              borderRadius: BorderRadius.circular(40),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.08),
+              ),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 40),
+
+                  // Album artwork container
+                  Container(
+                    width: 220,
+                    height: 220,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(25),
+                      border: Border.all(
+                        color:
+                        moodData.starColor.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.star_purple500_sharp,
+                      size: 100,
+                      color:
+                      moodData.starColor.withOpacity(0.4),
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  const Text(
+                    "Weightless",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    "Marconi Union • ${moodData.mood} Sync",
+                    style:
+                    const TextStyle(color: Colors.white38),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                    ),
+                    child: Slider(
+                      value: 0.4,
+                      onChanged: (v) {},
+                      activeColor: moodData.starColor,
+                      inactiveColor: Colors.white10,
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Row(
+                    mainAxisAlignment:
+                    MainAxisAlignment.spaceEvenly,
+                    children: [
+                      const Icon(Icons.skip_previous,
+                          size: 40),
+                      CircleAvatar(
+                        radius: 35,
+                        backgroundColor:
+                        moodData.starColor
+                            .withOpacity(0.8),
+                        child: const Icon(
+                          Icons.play_arrow,
+                          color: Colors.black,
+                          size: 40,
+                        ),
+                      ),
+                      const Icon(Icons.skip_next,
+                          size: 40),
+                    ],
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  Row(
+                    mainAxisAlignment:
+                    MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        onPressed: () =>
+                            moodData.updateMood("Neutral"),
+                        icon: const Icon(
+                          Icons.circle_outlined,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () =>
+                            moodData.updateMood("Calm"),
+                        icon: const Icon(
+                          Icons.star_half,
+                          color: Colors.blueAccent,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () =>
+                            moodData.updateMood("Energized"),
+                        icon: const Icon(
+                          Icons.auto_awesome,
+                          color: Colors.cyanAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

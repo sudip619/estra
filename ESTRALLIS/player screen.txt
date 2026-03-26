@@ -1,0 +1,313 @@
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'dart:ui';
+import 'package:provider/provider.dart';
+import 'package:spotify_sdk/models/player_state.dart';
+import 'package:spotify_sdk/spotify_sdk.dart';
+import 'package:marquee/marquee.dart'; // --- NEW: Added Marquee import ---
+import 'mood_provider.dart';
+
+
+class PlayerScreen extends StatelessWidget {
+  const PlayerScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final moodData = Provider.of<MoodProvider>(context);
+
+    return StreamBuilder<PlayerState>(
+        stream: SpotifySdk.subscribePlayerState(),
+        builder: (context, snapshot) {
+          // Extract real-time track data from Spotify
+          var track = snapshot.data?.track;
+          String songTitle = track?.name ?? "No Track Playing";
+          String artist = track?.artist.name ?? "Connect to Spotify";
+          bool isPaused = snapshot.data?.isPaused ?? true;
+
+          return SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20.0, vertical: 15.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          // --- 1. THE MUSIC PLAYER CARD ---
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(30),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                              child: Container(
+                                padding: const EdgeInsets.all(25),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(30),
+                                  border: Border.all(
+                                      color: Colors.white.withValues(alpha: 0.1)),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+
+                                    Container(
+                                      width: 160,
+                                      height: 160,
+                                      decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.05),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                              color: moodData.starColor
+                                                  .withValues(alpha: 0.3)),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: moodData.starColor
+                                                  .withValues(alpha: 0.2),
+                                              blurRadius: 30,
+                                              spreadRadius: 5,
+                                            )
+                                          ]),
+                                      // --- THE FIX: Dynamic Album Art ---
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: track?.imageUri != null
+                                            ? FutureBuilder<Uint8List?>(
+                                          future: SpotifySdk.getImage(
+                                            imageUri: track!.imageUri,
+                                            dimension: ImageDimension.large,
+                                          ),
+                                          builder: (context, imageSnapshot) {
+                                            if (imageSnapshot.connectionState == ConnectionState.waiting) {
+                                              return Center(child: CircularProgressIndicator(color: moodData.starColor));
+                                            }
+                                            if (imageSnapshot.hasData && imageSnapshot.data != null) {
+                                              return Image.memory(
+                                                imageSnapshot.data!,
+                                                fit: BoxFit.cover,
+                                              );
+                                            }
+                                            // Fallback if image fails to load
+                                            return Icon(Icons.music_note_rounded, size: 70, color: moodData.starColor.withValues(alpha: 0.8));
+                                          },
+                                        )
+                                            : Icon(Icons.music_note_rounded, size: 70, color: moodData.starColor.withValues(alpha: 0.8)),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 25),
+
+                                    // --- THE FIX: Marquee Banner for Long Titles ---
+                                    SizedBox(
+                                      height: 35, // Fixed height prevents expansion
+                                      child: songTitle.length > 20
+                                          ? Marquee(
+                                        text: songTitle,
+                                        style: const TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white),
+                                        scrollAxis: Axis.horizontal,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        blankSpace: 50.0,
+                                        velocity: 30.0,
+                                        pauseAfterRound: const Duration(seconds: 2),
+                                      )
+                                          : Center(
+                                        child: Text(
+                                          songTitle,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+
+                                    // --- THE FIX: Clean cut for long artist names ---
+                                    Text(
+                                      "$artist • ${moodData.mood} Sync",
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontSize: 14, color: Colors.white54),
+                                    ),
+                                    const SizedBox(height: 25),
+
+                                    // --- THE FIX: Live, Interactive Song Slider ---
+                                    Builder(builder: (context) {
+                                      int currentPosMs =
+                                          snapshot.data?.playbackPosition ?? 0;
+                                      int durationMs =
+                                          track?.duration ?? 1000;
+
+                                      double sliderValue =
+                                      (currentPosMs / durationMs).clamp(0.0, 1.0);
+
+                                      return Slider(
+                                        value: sliderValue,
+                                        activeColor: moodData.starColor,
+                                        inactiveColor: Colors.white10,
+                                        onChangeEnd: (newValue) {
+                                          int seekPositionMs =
+                                          (newValue * durationMs).round();
+                                          SpotifySdk.seekTo(
+                                              positionedMilliseconds: seekPositionMs);
+                                        },
+                                        onChanged: (v) {
+                                          // Allows smooth dragging locally
+                                        },
+                                      );
+                                    }),
+
+                                    Row(
+                                      mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(
+                                              Icons.skip_previous_rounded,
+                                              size: 40,
+                                              color: Colors.white),
+                                          onPressed: () =>
+                                              SpotifySdk.skipPrevious(),
+                                        ),
+                                        GestureDetector(
+                                          onTap: () => isPaused
+                                              ? SpotifySdk.resume()
+                                              : SpotifySdk.pause(),
+                                          child: CircleAvatar(
+                                            radius: 35,
+                                            backgroundColor: moodData.starColor,
+                                            child: Icon(
+                                                isPaused
+                                                    ? Icons.play_arrow_rounded
+                                                    : Icons.pause_rounded,
+                                                color: Colors.black,
+                                                size: 40),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                              Icons.skip_next_rounded,
+                                              size: 40,
+                                              color: Colors.white),
+                                          onPressed: () => SpotifySdk.skipNext(),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 65),
+
+                          const Text("AFFECTIVE STATE OVERRIDE",
+                              style: TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 10,
+                                  letterSpacing: 2)),
+                          const SizedBox(height: 15),
+
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 8,
+                            runSpacing: 10,
+                            children: [
+                              _buildMoodBtn(
+                                  "Melancholic",
+                                  Colors.blueGrey,
+                                  Icons.water_drop_rounded,
+                                  moodData,
+                                  context),
+                              _buildMoodBtn(
+                                  "Focused",
+                                  Colors.deepPurpleAccent,
+                                  Icons.center_focus_strong_rounded,
+                                  moodData,
+                                  context),
+                              _buildMoodBtn(
+                                  "Neutral",
+                                  Colors.white54,
+                                  Icons.horizontal_rule_rounded,
+                                  moodData,
+                                  context),
+                              _buildMoodBtn("Chill", Colors.tealAccent,
+                                  Icons.waves_rounded, moodData, context),
+                              _buildMoodBtn("Radiant", Colors.amberAccent,
+                                  Icons.wb_sunny_rounded, moodData, context),
+                            ],
+                          ),
+
+                          const SizedBox(height: 30),
+
+                          SizedBox(
+                            width: double.infinity,
+                            height: 65,
+                            child: moodData.isAnalyzing
+                                ? const Center(
+                                child: CircularProgressIndicator(
+                                    color: Colors.white))
+                                : ElevatedButton.icon(
+                              onPressed: () => moodData.scanVibe(),
+                              icon: const Icon(Icons.camera_alt_rounded,
+                                  color: Colors.black),
+                              label: const Text("SCAN MY VIBE",
+                                  style: TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                    BorderRadius.circular(20)),
+                                elevation: 10,
+                                shadowColor: moodData.starColor
+                                    .withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        });
+  }
+
+  Widget _buildMoodBtn(String moodName, Color color, IconData icon,
+      MoodProvider moodData, BuildContext context) {
+    final isSelected = moodData.mood == moodName;
+    return GestureDetector(
+      onTap: () {
+        moodData.updateMood(moodName);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? color.withValues(alpha: 0.2)
+              : Colors.white.withValues(alpha: 0.05),
+          border: Border.all(
+              color: isSelected ? color : Colors.transparent, width: 2),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Icon(icon, color: isSelected ? color : Colors.white54, size: 28),
+      ),
+    );
+  }
+}
